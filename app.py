@@ -1,49 +1,57 @@
 import streamlit as st
 import requests
+import json
 
-def buscar_clientes_gratis(tipo_negocio, localidad):
-    url = "https://nominatim.openstreetmap.org/search"
+# Pega aquí la clave que copiaste de Serper.dev
+API_KEY = "24f15051826fa884a67cfc2759e383df5137f049"
+
+def buscar_clientes(producto, localidad):
+    url = "https://google.serper.dev/places"
     
-    # Nominatim requiere identificar quién hace la consulta
+    # gl="cl" asegura que el algoritmo de búsqueda priorice resultados en Chile
+    payload = json.dumps({
+      "q": f"{producto} en {localidad}",
+      "gl": "cl",
+      "hl": "es"
+    })
+    
     headers = {
-        'User-Agent': 'AppVentasUsuario/1.0'
+      'X-API-KEY': API_KEY,
+      'Content-Type': 'application/json'
     }
     
-    # Estructuramos la búsqueda
-    params = {
-        'q': f"{tipo_negocio} en {localidad}",
-        'format': 'json',
-        'addressdetails': 1,
-        'limit': 30 # Máximo de resultados por búsqueda
-    }
-    
-    response = requests.get(url, params=params, headers=headers)
+    response = requests.post(url, headers=headers, data=payload)
     
     if response.status_code == 200:
-        return response.json()
+        return response.json().get("places", [])
+    
+    st.error("Error en la conexión con la base de datos.")
     return []
 
 st.title("Buscador de Clientes Potenciales")
+st.caption("Motor de búsqueda: Google Maps (Vía Serper)")
 
-# Instrucciones ajustadas para OpenStreetMap
-tipo_negocio = st.text_input("¿Qué tipo de negocio buscas? (ej. ferretería, farmacia, fábrica)")
-localidad = st.text_input("¿En qué ciudad o sector? (ej. Concepción)")
+producto = st.text_input("¿Qué producto deseas vender?")
+# Dejo Concepción por defecto para acelerar tus pruebas
+localidad = st.text_input("¿En qué ciudad o sector?", value="Concepción")
 
 if st.button("Buscar Prospectos"):
-    if tipo_negocio and localidad:
-        with st.spinner("Buscando en bases de datos públicas..."):
-            resultados = buscar_clientes_gratis(tipo_negocio, localidad)
+    if producto and localidad:
+        with st.spinner("Buscando negocios..."):
+            resultados = buscar_clientes(producto, localidad)
             
-            # Filtramos para mostrar solo resultados que tengan un nombre comercial
-            negocios_validos = [lugar for lugar in resultados if "name" in lugar and lugar["name"]]
-            
-            if negocios_validos:
-                st.success(f"Se encontraron {len(negocios_validos)} posibles clientes.")
-                for lugar in negocios_validos:
-                    st.subheader(lugar.get("name"))
-                    st.write(f"📍 Dirección: {lugar.get('display_name')}")
+            if resultados:
+                st.success(f"Se encontraron {len(resultados)} posibles clientes.")
+                for lugar in resultados:
+                    st.subheader(lugar.get("title", "Sin nombre comercial"))
+                    st.write(f"📍 Dirección: {lugar.get('address', 'Dirección no disponible')}")
+                    
+                    # Si el negocio tiene un teléfono público, lo mostramos
+                    if "phoneNumber" in lugar:
+                        st.write(f"📞 Teléfono: {lugar['phoneNumber']}")
+                        
                     st.write("---")
             else:
-                st.warning("No se encontraron negocios. Intenta usar palabras más generales como 'taller', 'mercado' o 'clínica'.")
+                st.warning("No se encontraron negocios con esos criterios.")
     else:
-        st.error("Por favor, ingresa el tipo de negocio y la localidad.")
+        st.error("Por favor, ingresa el producto y la localidad.")
