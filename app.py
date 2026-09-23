@@ -1,44 +1,49 @@
 import streamlit as st
 import requests
 
-# Configuración de la API de Google (requiere tu propia clave)
-API_KEY = "TU_API_KEY_AQUI"
-
-def buscar_clientes(producto, localidad):
-    url = "https://maps.googleapis.com/maps/api/place/textsearch/json"
+def buscar_clientes_gratis(tipo_negocio, localidad):
+    url = "https://nominatim.openstreetmap.org/search"
     
-    # Se estructura la búsqueda para encontrar negocios relacionados al producto
-    query = f"empresas o negocios relacionados con {producto} en {localidad}"
-    
-    params = {
-        "query": query,
-        "key": API_KEY,
-        "language": "es"
+    # Nominatim requiere identificar quién hace la consulta
+    headers = {
+        'User-Agent': 'AppVentasUsuario/1.0'
     }
     
-    response = requests.get(url, params=params)
+    # Estructuramos la búsqueda
+    params = {
+        'q': f"{tipo_negocio} en {localidad}",
+        'format': 'json',
+        'addressdetails': 1,
+        'limit': 30 # Máximo de resultados por búsqueda
+    }
+    
+    response = requests.get(url, params=params, headers=headers)
+    
     if response.status_code == 200:
-        return response.json().get("results", [])
+        return response.json()
     return []
 
 st.title("Buscador de Clientes Potenciales")
 
-producto = st.text_input("¿Qué producto deseas vender?")
-localidad = st.text_input("¿En qué ciudad o sector?")
+# Instrucciones ajustadas para OpenStreetMap
+tipo_negocio = st.text_input("¿Qué tipo de negocio buscas? (ej. ferretería, farmacia, fábrica)")
+localidad = st.text_input("¿En qué ciudad o sector? (ej. Concepción)")
 
 if st.button("Buscar Prospectos"):
-    if producto and localidad:
-        with st.spinner("Buscando..."):
-            resultados = buscar_clientes(producto, localidad)
+    if tipo_negocio and localidad:
+        with st.spinner("Buscando en bases de datos públicas..."):
+            resultados = buscar_clientes_gratis(tipo_negocio, localidad)
             
-            if resultados:
-                st.success(f"Se encontraron {len(resultados)} posibles clientes.")
-                for lugar in resultados:
+            # Filtramos para mostrar solo resultados que tengan un nombre comercial
+            negocios_validos = [lugar for lugar in resultados if "name" in lugar and lugar["name"]]
+            
+            if negocios_validos:
+                st.success(f"Se encontraron {len(negocios_validos)} posibles clientes.")
+                for lugar in negocios_validos:
                     st.subheader(lugar.get("name"))
-                    st.write(f"📍 Dirección: {lugar.get('formatted_address')}")
-                    # Nota: Para extraer números de teléfono se usa la API 'Place Details'
+                    st.write(f"📍 Dirección: {lugar.get('display_name')}")
                     st.write("---")
             else:
-                st.warning("No se encontraron negocios con esos criterios.")
+                st.warning("No se encontraron negocios. Intenta usar palabras más generales como 'taller', 'mercado' o 'clínica'.")
     else:
-        st.error("Por favor, ingresa el producto y la localidad.")
+        st.error("Por favor, ingresa el tipo de negocio y la localidad.")
